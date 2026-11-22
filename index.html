@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Kamera Prompter</title>
+<style>
+  :root {
+    --bg: #0b0d10;
+    --panel: #15191e;
+    --line: #2a3139;
+    --text: #f2f4f6;
+    --muted: #8b96a2;
+    --accent: #4da3ff;
+    --rec: #ff3b30;
+    --ok: #30d158;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
+  button, input, textarea, select { font: inherit; color: inherit; }
+  .hidden { display: none !important; }
+
+  /* ---------- Setup screen ---------- */
+  #setup { max-width: 640px; margin: 0 auto; padding: 20px 16px calc(32px + env(safe-area-inset-bottom)); }
+  h1 { font-size: 22px; margin: 4px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 18px; }
+  label.block { display: block; font-size: 14px; color: var(--muted); margin: 16px 0 6px; }
+  textarea { width: 100%; min-height: 38vh; resize: vertical; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px; padding: 12px; font-size: 16px; line-height: 1.45; }
+  .row { display: flex; align-items: center; gap: 12px; }
+  .row > span.val { min-width: 54px; text-align: right; font-variant-numeric: tabular-nums; }
+  input[type=range] { flex: 1; accent-color: var(--accent); height: 32px; }
+  .toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+  .chk { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 12px; font-size: 15px; }
+  .chk input { width: 20px; height: 20px; accent-color: var(--accent); }
+  select { width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; font-size: 16px; }
+  .primary { width: 100%; margin-top: 22px; padding: 16px; border: 0; border-radius: 14px;
+    background: var(--accent); color: #fff; font-size: 17px; font-weight: 600; }
+  .note { color: var(--muted); font-size: 13px; line-height: 1.5; margin-top: 14px; }
+  .err { color: #ff8a80; font-size: 14px; margin-top: 12px; white-space: pre-line; }
+
+  /* ---------- Studio screen ---------- */
+  #studio { position: fixed; inset: 0; background: #000; overflow: hidden; }
+  #cam { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  #cam.selfie { transform: scaleX(-1); }
+  #shade { position: absolute; left: 0; right: 0; top: 0; pointer-events: none;
+    background: linear-gradient(to bottom, rgba(0,0,0,.82) 0%, rgba(0,0,0,.82) 82%, rgba(0,0,0,0) 100%); }
+  #viewport { position: absolute; left: 0; right: 0; top: 0; overflow: hidden;
+    padding: calc(10px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)); }
+  #scroller { will-change: transform; }
+  #script { margin: 0; font-weight: 600; line-height: 1.32; white-space: pre-wrap; word-wrap: break-word;
+    text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+  #script.mirror { transform: scaleX(-1); }
+  #script .spacer { display: block; }
+  #marker { position: absolute; left: 6px; width: 0; height: 0; pointer-events: none;
+    border-top: 9px solid transparent; border-bottom: 9px solid transparent; border-left: 12px solid var(--accent); opacity: .9; }
+
+  #countdown { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 30vmin; font-weight: 700; color: #fff; text-shadow: 0 4px 30px rgba(0,0,0,.7); pointer-events: none; }
+
+  #recbadge { position: absolute; top: calc(10px + env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right));
+    display: flex; align-items: center; gap: 6px; background: rgba(0,0,0,.55); padding: 6px 10px; border-radius: 999px;
+    font-size: 14px; font-variant-numeric: tabular-nums; }
+  #recbadge i { width: 10px; height: 10px; border-radius: 50%; background: var(--rec); animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: .25; } }
+
+  #bar { position: absolute; left: 0; right: 0; bottom: 0;
+    padding: 12px max(12px, env(safe-area-inset-right)) calc(14px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    background: linear-gradient(to top, rgba(0,0,0,.75), rgba(0,0,0,0)); }
+  .group { display: flex; align-items: center; gap: 8px; }
+  .ctl { min-width: 48px; height: 48px; padding: 0 12px; border-radius: 24px; border: 0;
+    background: rgba(255,255,255,.16); color: #fff; font-size: 15px; font-weight: 600; backdrop-filter: blur(8px); }
+  .ctl small { display: block; font-size: 10px; font-weight: 500; opacity: .75; }
+  #recBtn { width: 72px; height: 72px; border-radius: 50%; border: 4px solid #fff; background: transparent; padding: 0;
+    display: flex; align-items: center; justify-content: center; }
+  #recBtn i { width: 54px; height: 54px; border-radius: 50%; background: var(--rec); transition: all .2s; }
+  #recBtn.on i { width: 28px; height: 28px; border-radius: 6px; }
+  #speedVal { min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; font-size: 14px; }
+
+  #toast { position: absolute; left: 50%; bottom: calc(110px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+    background: rgba(0,0,0,.75); padding: 8px 14px; border-radius: 999px; font-size: 14px; pointer-events: none;
+    transition: opacity .3s; opacity: 0; white-space: nowrap; }
+
+  /* ---------- Result sheet ---------- */
+  #result { position: fixed; inset: 0; background: rgba(0,0,0,.92); display: flex; flex-direction: column;
+    padding: calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)); gap: 12px; }
+  #result video { flex: 1; min-height: 0; width: 100%; background: #000; border-radius: 12px; object-fit: contain; }
+  #result .meta { color: var(--muted); font-size: 13px; text-align: center; }
+  #result .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  #result .btns button { padding: 14px; border-radius: 12px; border: 0; font-size: 16px; font-weight: 600; }
+  #saveBtn { background: var(--ok); color: #04210c; }
+  #againBtn { background: rgba(255,255,255,.14); }
+  #discardBtn { grid-column: 1 / -1; background: transparent; color: var(--muted); font-weight: 500 !important; }
+</style>
+</head>
+<body>
+
+<!-- ================= SETUP ================= -->
+<main id="setup">
+  <h1>Kamera Prompter</h1>
+  <p class="sub">Metnin kameranın hemen altında akar, video aynı anda kaydedilir. Kayıt sadece bu telefonda kalır.</p>
+
+  <label class="block" for="text">Metin (script)</label>
+  <textarea id="text" placeholder="Videoda okuyacağın metni buraya yapıştır..."></textarea>
+
+  <label class="block">Kayma hızı</label>
+  <div class="row"><input id="speed" type="range" min="10" max="200" step="5" value="60"><span class="val" id="speedLbl">60</span></div>
+
+  <label class="block">Yazı boyutu</label>
+  <div class="row"><input id="size" type="range" min="20" max="72" step="2" value="38"><span class="val" id="sizeLbl">38px</span></div>
+
+  <label class="block">Metin alanı yüksekliği (ekranın üst kısmı)</label>
+  <div class="row"><input id="area" type="range" min="20" max="70" step="5" value="35"><span class="val" id="areaLbl">%35</span></div>
+
+  <label class="block" for="quality">Video kalitesi</label>
+  <select id="quality">
+    <option value="1080">1080p (önerilen)</option>
+    <option value="720">720p (daha küçük dosya)</option>
+    <option value="2160">4K (telefon destekliyorsa)</option>
+  </select>
+
+  <div class="toggles">
+    <label class="chk"><input id="mirror" type="checkbox"> Ayna modu (prompter camı)</label>
+    <label class="chk"><input id="countdownOn" type="checkbox" checked> 3-2-1 geri sayım</label>
+    <label class="chk"><input id="autoScroll" type="checkbox" checked> Kayıtla birlikte kaydır</label>
+    <label class="chk"><input id="preview" type="checkbox" checked> Kamera önizlemesi</label>
+  </div>
+
+  <button class="primary" id="startBtn">Kamerayı aç</button>
+  <div class="err" id="err"></div>
+
+  <p class="note">
+    İpuçları: YouTube için telefonu <b>yatay</b> tut. Okurken gözünü metnin en üst satırına yakın tut; o satır kameraya en yakın yer.
+    Metne dokunarak kaydırmayı durdurup başlatabilir, parmağınla yukarı-aşağı kaydırarak yerini düzeltebilirsin.
+    Metin ve ayarlar bu telefonda saklanır, hiçbir yere gönderilmez.
+  </p>
+</main>
+
+<!-- ================= STUDIO ================= -->
+<section id="studio" class="hidden">
+  <video id="cam" class="selfie" autoplay playsinline muted></video>
+  <div id="shade"></div>
+  <div id="viewport"><div id="scroller"><p id="script"></p></div></div>
+  <div id="marker"></div>
+  <div id="countdown" class="hidden"></div>
+  <div id="recbadge" class="hidden"><i></i><span id="recTime">00:00</span></div>
+  <div id="toast"></div>
+
+  <div id="bar">
+    <div class="group">
+      <button class="ctl" id="backBtn" aria-label="Geri">✕</button>
+      <button class="ctl" id="restartBtn" aria-label="Başa sar">⟲</button>
+    </div>
+    <button id="recBtn" aria-label="Kaydı başlat / durdur"><i></i></button>
+    <div class="group">
+      <button class="ctl" id="slowBtn" aria-label="Yavaşlat">−</button>
+      <span id="speedVal">60</span>
+      <button class="ctl" id="fastBtn" aria-label="Hızlandır">+</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= RESULT ================= -->
+<section id="result" class="hidden">
+  <video id="playback" controls playsinline></video>
+  <div class="meta" id="resultMeta"></div>
+  <div class="btns">
+    <button id="saveBtn">Kaydet / Paylaş</button>
+    <button id="againBtn">Yeni çekim</button>
+    <button id="discardBtn">Bu çekimi sil</button>
+  </div>
+</section>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem("prompter." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem("prompter." + k, JSON.stringify(v)); } catch {} },
+  };
+
+  // ---------- settings ----------
+  const S = {
+    text: store.get("text", ""),
+    speed: store.get("speed", 60),
+    size: store.get("size", 38),
+    area: store.get("area", 35),
+    quality: store.get("quality", "1080"),
+    mirror: store.get("mirror", false),
+    countdownOn: store.get("countdownOn", true),
+    autoScroll: store.get("autoScroll", true),
+    preview: store.get("preview", true),
+  };
+  $("text").value = S.text;
+  for (const k of ["speed", "size", "area"]) $(k).value = S[k];
+  $("quality").value = S.quality;
+  for (const k of ["mirror", "countdownOn", "autoScroll", "preview"]) $(k).checked = S[k];
+
+  const labels = () => {
+    $("speedLbl").textContent = S.speed;
+    $("sizeLbl").textContent = S.size + "px";
+    $("areaLbl").textContent = "%" + S.area;
+    $("speedVal").textContent = S.speed;
+  };
+  labels();
+
+  $("text").addEventListener("input", e => { S.text = e.target.value; store.set("text", S.text); });
+  for (const k of ["speed", "size", "area"]) $(k).addEventListener("input", e => { S[k] = +e.target.value; store.set(k, S[k]); labels(); });
+  $("quality").addEventListener("change", e => { S.quality = e.target.value; store.set("quality", S.quality); });
+  for (const k of ["mirror", "countdownOn", "autoScroll", "preview"]) $(k).addEventListener("change", e => { S[k] = e.target.checked; store.set(k, S[k]); });
+
+  // ---------- camera ----------
+  let stream = null;
+  let wakeLock = null;
+
+  async function openCamera() {
+    $("err").textContent = "";
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      $("err").textContent = "Kamera bu sayfada açılamıyor. Sayfayı https:// adresinden aç (GitHub Pages linki).";
+      return;
+    }
+    const h = +S.quality, w = Math.round(h * 16 / 9);
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: 30 } },
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false },
+      });
+    } catch (e) {
+      const msg = {
+        NotAllowedError: "Kamera/mikrofon izni verilmedi. Tarayıcı ayarlarından bu siteye kamera ve mikrofon izni ver, sonra tekrar dene.",
+        NotFoundError: "Kamera veya mikrofon bulunamadı.",
+        NotReadableError: "Kamera başka bir uygulama tarafından kullanılıyor. Diğer kamera uygulamalarını kapat.",
+        OverconstrainedError: "Seçilen kalite desteklenmiyor. Daha düşük kalite seç.",
+      }[e.name] || ("Kamera açılamadı: " + e.message);
+      $("err").textContent = msg;
+      return;
+    }
+    $("cam").srcObject = stream;
+    enterStudio();
+  }
+
+  function stopCamera() {
+    stream?.getTracks().forEach(t => t.stop());
+    stream = null;
+    $("cam").srcObject = null;
+  }
+
+  async function keepAwake(on) {
+    try {
+      if (on && "wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen");
+      else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+    } catch {}
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && !$("studio").classList.contains("hidden")) keepAwake(true);
+  });
+
+  // ---------- prompter layout & scroll ----------
+  let offset = 0;          // px scrolled
+  let scrolling = false;
+  let lastT = 0;
+
+  function layout() {
+    const vh = window.innerHeight;
+    const areaPx = Math.round(vh * S.area / 100);
+    $("viewport").style.height = areaPx + "px";
+    $("shade").style.height = Math.round(areaPx * 1.15) + "px";
+    $("cam").style.visibility = S.preview ? "visible" : "hidden";
+    const sc = $("script");
+    sc.style.fontSize = S.size + "px";
+    sc.classList.toggle("mirror", S.mirror);
+    // Leave blank space after the text so the last line can scroll to the top.
+    sc.innerHTML = "";
+    sc.append(document.createTextNode(S.text.trim() || "Metin boş. Geri dönüp metnini yapıştır."));
+    const end = document.createElement("span");
+    end.className = "spacer";
+    end.style.height = areaPx + "px";
+    sc.append(end);
+    // Reading-line marker sits at the first text line.
+    const top = parseFloat(getComputedStyle($("viewport")).paddingTop) || 10;
+    $("marker").style.top = (top + S.size * 0.66 - 9) + "px";
+    apply();
+  }
+
+  function maxOffset() { return Math.max(0, $("scroller").scrollHeight - S.size * 1.5); }
+  function apply() {
+    offset = Math.min(Math.max(0, offset), maxOffset());
+    $("scroller").style.transform = `translateY(${-offset}px)`;
+  }
+
+  function tick(t) {
+    if (!scrolling) return;
+    const dt = lastT ? (t - lastT) / 1000 : 0;
+    lastT = t;
+    offset += S.speed * dt * (S.size / 38);
+    apply();
+    if (offset >= maxOffset()) { scrolling = false; toast("Metin bitti"); return; }
+    requestAnimationFrame(tick);
+  }
+  function setScroll(on) {
+    if (on === scrolling) return;
+    scrolling = on;
+    lastT = 0;
+    if (on) requestAnimationFrame(tick);
+  }
+
+  // Tap text = pause/resume; drag = manual position.
+  let drag = null;
+  const vp = $("viewport");
+  vp.addEventListener("pointerdown", e => { drag = { y: e.clientY, start: offset, moved: false, was: scrolling }; setScroll(false); vp.setPointerCapture(e.pointerId); });
+  vp.addEventListener("pointermove", e => {
+    if (!drag) return;
+    const dy = e.clientY - drag.y;
+    if (Math.abs(dy) > 6) drag.moved = true;
+    if (drag.moved) { offset = drag.start - dy; apply(); }
+  });
+  vp.addEventListener("pointerup", () => {
+    if (!drag) return;
+    const { moved, was } = drag; drag = null;
+    if (moved) { if (was) setScroll(true); }
+    else { setScroll(!was); toast(was ? "Durdu" : "Devam"); }
+  });
+  vp.addEventListener("pointercancel", () => { drag = null; });
+
+  // ---------- recording ----------
+  let recorder = null, chunks = [], recStart = 0, recTimer = null, lastBlob = null, lastUrl = null, lastType = "";
+
+  function pickType() {
+    const types = [
+      "video/mp4;codecs=avc1.640028,mp4a.40.2",
+      "video/mp4;codecs=avc1,mp4a",
+      "video/mp4",
+      "video/webm;codecs=vp9,opus",
+      "video/webm;codecs=vp8,opus",
+      "video/webm",
+    ];
+    if (!window.MediaRecorder) return null;
+    return types.find(t => MediaRecorder.isTypeSupported?.(t)) || "";
+  }
+
+  async function countdown() {
+    if (!S.countdownOn) return;
+    const el = $("countdown");
+    el.classList.remove("hidden");
+    for (const n of [3, 2, 1]) { el.textContent = n; await new Promise(r => setTimeout(r, 800)); }
+    el.classList.add("hidden");
+  }
+
+  async function startRec() {
+    const type = pickType();
+    if (type === null) { toast("Bu tarayıcı video kaydını desteklemiyor"); return; }
+    $("recBtn").disabled = true;
+    await countdown();
+    chunks = [];
+    const bits = { "720": 6e6, "1080": 12e6, "2160": 35e6 }[S.quality] || 12e6;
+    try {
+      recorder = new MediaRecorder(stream, type ? { mimeType: type, videoBitsPerSecond: bits, audioBitsPerSecond: 192000 } : undefined);
+    } catch {
+      recorder = new MediaRecorder(stream);
+    }
+    lastType = recorder.mimeType || type || "video/webm";
+    recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+    recorder.onstop = showResult;
+    recorder.start(1000);
+    recStart = Date.now();
+    $("recBtn").classList.add("on");
+    $("recBtn").disabled = false;
+    $("recbadge").classList.remove("hidden");
+    recTimer = setInterval(() => {
+      const s = Math.floor((Date.now() - recStart) / 1000);
+      $("recTime").textContent = String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+    }, 250);
+    if (S.autoScroll) setScroll(true);
+  }
+
+  function stopRec() {
+    if (!recorder || recorder.state === "inactive") return;
+    setScroll(false);
+    recorder.stop();
+    clearInterval(recTimer);
+    $("recBtn").classList.remove("on");
+    $("recbadge").classList.add("hidden");
+  }
+
+  function fileName() {
+    const d = new Date(), p = n => String(n).padStart(2, "0");
+    const ext = lastType.includes("mp4") ? "mp4" : "webm";
+    return `cekim-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.${ext}`;
+  }
+
+  function showResult() {
+    lastBlob = new Blob(chunks, { type: lastType.split(";")[0] });
+    chunks = [];
+    if (lastUrl) URL.revokeObjectURL(lastUrl);
+    lastUrl = URL.createObjectURL(lastBlob);
+    $("playback").src = lastUrl;
+    const secs = Math.round((Date.now() - recStart) / 1000);
+    $("resultMeta").textContent = `${Math.floor(secs / 60)} dk ${secs % 60} sn · ${(lastBlob.size / 1048576).toFixed(1)} MB · ${lastType.includes("mp4") ? "MP4" : "WebM"}`;
+    $("result").classList.remove("hidden");
+  }
+
+  async function save() {
+    if (!lastBlob) return;
+    const name = fileName();
+    const file = new File([lastBlob], name, { type: lastBlob.type });
+    // Share sheet lets iPhone users "Save Video" to Photos; Android can save to Files/Gallery.
+    if (navigator.canShare?.({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: name }); return; }
+      catch (e) { if (e.name === "AbortError") return; }
+    }
+    const a = document.createElement("a");
+    a.href = lastUrl; a.download = name;
+    document.body.append(a); a.click(); a.remove();
+    toast("İndirildi: " + name);
+  }
+
+  function closeResult(discard) {
+    if (discard && !confirm("Bu çekim silinsin mi? Kaydetmediysen geri alınamaz.")) return;
+    $("playback").pause();
+    $("playback").removeAttribute("src");
+    $("result").classList.add("hidden");
+    offset = 0; apply();
+  }
+
+  // ---------- screens ----------
+  function enterStudio() {
+    $("setup").classList.add("hidden");
+    $("studio").classList.remove("hidden");
+    offset = 0;
+    labels();
+    layout();
+    keepAwake(true);
+  }
+  function leaveStudio() {
+    if (recorder && recorder.state !== "inactive") { if (!confirm("Kayıt devam ediyor. Durdurup çıkılsın mı?")) return; stopRec(); }
+    setScroll(false);
+    stopCamera();
+    keepAwake(false);
+    $("studio").classList.add("hidden");
+    $("setup").classList.remove("hidden");
+  }
+
+  let toastT;
+  function toast(msg) {
+    const el = $("toast");
+    el.textContent = msg; el.style.opacity = 1;
+    clearTimeout(toastT); toastT = setTimeout(() => el.style.opacity = 0, 1400);
+  }
+
+  function nudgeSpeed(d) {
+    S.speed = Math.min(200, Math.max(10, S.speed + d));
+    store.set("speed", S.speed); $("speed").value = S.speed; labels();
+  }
+
+  $("startBtn").addEventListener("click", openCamera);
+  $("backBtn").addEventListener("click", leaveStudio);
+  $("restartBtn").addEventListener("click", () => { offset = 0; apply(); toast("Başa sarıldı"); });
+  $("slowBtn").addEventListener("click", () => nudgeSpeed(-5));
+  $("fastBtn").addEventListener("click", () => nudgeSpeed(5));
+  $("recBtn").addEventListener("click", () => (recorder && recorder.state === "recording") ? stopRec() : startRec());
+  $("saveBtn").addEventListener("click", save);
+  $("againBtn").addEventListener("click", () => closeResult(false));
+  $("discardBtn").addEventListener("click", () => closeResult(true));
+  window.addEventListener("resize", () => { if (!$("studio").classList.contains("hidden")) layout(); });
+  window.addEventListener("beforeunload", e => { if (recorder && recorder.state === "recording") { e.preventDefault(); e.returnValue = ""; } });
+})();
+</script>
+</body>
+</html>
