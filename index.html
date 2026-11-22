@@ -31,6 +31,11 @@
   label.block { display: block; font-size: 14px; color: var(--muted); margin: 16px 0 6px; }
   textarea { width: 100%; min-height: 38vh; resize: vertical; background: var(--panel);
     border: 1px solid var(--line); border-radius: 12px; padding: 12px; font-size: 16px; line-height: 1.45; }
+  .textHead { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; }
+  .textBtns { display: flex; gap: 8px; margin-bottom: 6px; }
+  .small { padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); font-size: 14px; }
+  .small.ghost { color: var(--muted); }
+  .count { color: var(--muted); font-size: 13px; margin-top: 6px; text-align: right; }
   .row { display: flex; align-items: center; gap: 12px; }
   .row > span.val { min-width: 54px; text-align: right; font-variant-numeric: tabular-nums; }
   input[type=range] { flex: 1; accent-color: var(--accent); height: 32px; }
@@ -106,8 +111,16 @@
   <h1>Kamera Prompter</h1>
   <p class="sub">Metnin kameranın hemen altında akar, video aynı anda kaydedilir. Kayıt sadece bu telefonda kalır.</p>
 
-  <label class="block" for="text">Metin (script)</label>
-  <textarea id="text" placeholder="Videoda okuyacağın metni buraya yapıştır..."></textarea>
+  <div class="textHead">
+    <label class="block" for="text">Metin (script)</label>
+    <div class="textBtns">
+      <button type="button" class="small" id="loadBtn">Dosyadan yükle</button>
+      <button type="button" class="small ghost" id="clearBtn">Temizle</button>
+    </div>
+  </div>
+  <input type="file" id="fileIn" accept=".txt,.md,.srt,text/plain,text/markdown" class="hidden">
+  <textarea id="text" placeholder="Videoda okuyacağın metni buraya yapıştır ya da 'Dosyadan yükle' ile .txt dosyası seç..."></textarea>
+  <div class="count" id="count"></div>
 
   <label class="block">Kayma hızı</label>
   <div class="row"><input id="speed" type="range" min="10" max="200" step="5" value="60"><span class="val" id="speedLbl">60</span></div>
@@ -210,7 +223,36 @@
   };
   labels();
 
-  $("text").addEventListener("input", e => { S.text = e.target.value; store.set("text", S.text); });
+  // Word count + rough read time (~150 spoken words per minute).
+  function updateCount() {
+    const words = (S.text.match(/\S+/g) || []).length;
+    const mins = words / 150;
+    $("count").textContent = words
+      ? `${words} kelime · yaklaşık ${mins < 1 ? Math.round(mins * 60) + " sn" : Math.floor(mins) + " dk " + Math.round((mins % 1) * 60) + " sn"} okuma`
+      : "";
+  }
+  function setText(v) { S.text = v; $("text").value = v; store.set("text", v); updateCount(); }
+  updateCount();
+
+  $("text").addEventListener("input", e => setText(e.target.value));
+
+  // Load a plain-text file from the phone. Subtitle files (.srt) are stripped to just the spoken lines.
+  $("loadBtn").addEventListener("click", () => $("fileIn").click());
+  $("fileIn").addEventListener("change", async e => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { $("err").textContent = "Dosya çok büyük (en fazla 2 MB)."; return; }
+    if (S.text.trim() && !confirm("Kutudaki metin, dosyadaki metinle değiştirilsin mi?")) return;
+    let txt = await file.text();
+    txt = txt.replace(/^﻿/, "").replace(/\r\n?/g, "\n");
+    if (/\.srt$/i.test(file.name)) {
+      txt = txt.split(/\n{2,}/).map(b => b.split("\n").filter(l => !/^\d+$/.test(l.trim()) && !/-->/.test(l)).join(" ")).filter(Boolean).join("\n");
+    }
+    setText(txt.trim());
+    $("err").textContent = "";
+  });
+  $("clearBtn").addEventListener("click", () => { if (S.text && confirm("Metin silinsin mi?")) setText(""); });
   for (const k of ["speed", "size", "area"]) $(k).addEventListener("input", e => { S[k] = +e.target.value; store.set(k, S[k]); labels(); });
   $("quality").addEventListener("change", e => { S.quality = e.target.value; store.set("quality", S.quality); });
   for (const k of ["mirror", "countdownOn", "autoScroll", "preview"]) $(k).addEventListener("change", e => { S[k] = e.target.checked; store.set(k, S[k]); });
