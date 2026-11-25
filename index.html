@@ -190,6 +190,7 @@
   </div>
 </section>
 
+<script src="mp4fix.js"></script>
 <script>
 (() => {
   const $ = id => document.getElementById(id);
@@ -436,13 +437,24 @@
     return `cekim-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.${ext}`;
   }
 
-  function showResult() {
-    lastBlob = new Blob(chunks, { type: lastType.split(";")[0] });
+  async function showResult() {
+    const secs = Math.round((Date.now() - recStart) / 1000);
+    let blob = new Blob(chunks, { type: lastType.split(";")[0] });
     chunks = [];
+    $("resultMeta").textContent = "Video hazırlanıyor...";
+    $("saveBtn").disabled = true;
+    $("result").classList.remove("hidden");
+    // Browsers record MP4 in ~4 s fragments with no total length in the header,
+    // so phone galleries show only the first few seconds. Rebuild it as a normal MP4.
+    if (lastType.includes("mp4") && window.defragMp4) {
+      try { blob = await window.defragMp4(blob); }
+      catch (e) { console.warn("MP4 fix failed, keeping original", e); }
+    }
+    lastBlob = blob;
+    $("saveBtn").disabled = false;
     if (lastUrl) URL.revokeObjectURL(lastUrl);
     lastUrl = URL.createObjectURL(lastBlob);
     $("playback").src = lastUrl;
-    const secs = Math.round((Date.now() - recStart) / 1000);
     $("resultMeta").textContent = `${Math.floor(secs / 60)} dk ${secs % 60} sn · ${(lastBlob.size / 1048576).toFixed(1)} MB · ${lastType.includes("mp4") ? "MP4" : "WebM"}`;
     $("result").classList.remove("hidden");
   }
